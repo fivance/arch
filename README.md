@@ -1,156 +1,279 @@
-PREREQUISITES
+# 🐧 Arch Linux Installation Guide
 
-Burn ISO image to na USB and start Arch install
-# Verify the boot mode (BIOS/UEFI)
-cat /sys/firmware/efi/fw_platform_size 
-# If the command returns 64, the system is booted in UEFI mode and has a 64-bit x64 UEFI.
-# If the command returns 32, the system is booted in UEFI mode and has a 32-bit IA32 UEFI. While this is supported, it will limit   the  boot loader choice to those that support mixed mode booting.
-# If it returns No such file or directory, the system may be booted in BIOS (or CSM) mode.
+A step-by-step guide for installing Arch Linux from scratch, covering both BIOS and UEFI systems.
 
-# VERIFY NETWORK
+---
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Verify Boot Mode](#verify-boot-mode)
+- [Network Setup](#network-setup)
+- [Partitioning](#partitioning)
+- [Format Partitions](#format-partitions)
+- [Mount Filesystems](#mount-filesystems)
+- [Mirrors & Base Install](#mirrors--base-install)
+- [fstab](#fstab)
+- [Chroot & System Configuration](#chroot--system-configuration)
+- [Users](#users)
+- [Network](#network)
+- [Bootloader](#bootloader)
+- [Unmount & Reboot](#unmount--reboot)
+- [Post-Install Extras](#post-install-extras)
+
+---
+
+## Prerequisites
+
+Burn an ISO image to a USB drive and boot from it to start the Arch install.
+
+---
+
+## Verify Boot Mode
+
+```bash
+cat /sys/firmware/efi/fw_platform_size
+```
+
+| Output | Meaning |
+|--------|---------|
+| `64` | UEFI mode, 64-bit (x64) |
+| `32` | UEFI mode, 32-bit (IA32) — limited bootloader support |
+| No such file or directory | BIOS (or CSM) mode |
+
+---
+
+## Network Setup
+
+```bash
 ip link
-# WIFI 
+```
+
+### Wi-Fi (using iwctl)
+
+```bash
 iwctl
 [iwd]# device list
-[iwd]# device name set-property Powered on
-[iwd]# adapter adapter set-property Powered on
-[iwd]# station name scan
-[iwd]# station name get-networks
-[iwd]# station name connect SSID
-ping ping.archlinux.org
+[iwd]# device <name> set-property Powered on
+[iwd]# adapter <adapter> set-property Powered on
+[iwd]# station <name> scan
+[iwd]# station <name> get-networks
+[iwd]# station <name> connect <SSID>
+```
 
-# Update system
+### Verify Connection
+
+```bash
+ping archlinux.org
+```
+
+### Sync Time
+
+```bash
 timedatectl
+```
 
-# PARTITIONING
+---
 
-lsblk # list devices
-gdisk /$devicename # ex. if your disk is named sda do gdisk /dev/sda
+## Partitioning
 
-# Create New partiton (boot partition)
-1)When in gdisk press n
-2)First sector:default
-3)Last sector:  #here you actually specify disk partition size
-Hex code or GUID: ef02 (BIOS) or EF00 (UEFI)
+```bash
+lsblk                  # list block devices
+gdisk /dev/<device>    # e.g. gdisk /dev/sda
+```
 
-# Create New partiton (swap partition)
-# Generally SWAP partition is 1.5 times your RAM
-1) gdisk -> press n for new partition again
-2) First sector:default
-3) Last sector: Size of your swap partition
-4) Hex code or GUID: 8200 (8200 is code for Linux swap)
+Inside `gdisk`, press `n` to create a new partition. Use the table below as a reference:
 
-# Create New partition (root partition)
-# Depends how much space you have + how many packages do you plan to install
-1) gdisk -> press n for new partition again
-2) First sector:default
-3) Last sector: Size of your swap partition
-4) Hex code or GUID: 8300 (8300 is code for Linux filesystem)
+| Partition | Size | Hex Code | Notes |
+|-----------|------|----------|-------|
+| Boot | ~512MB | `ef02` (BIOS) / `EF00` (UEFI) | Required for booting |
+| Swap | ~1.5× your RAM | `8200` | Linux swap |
+| Root | 20–50GB+ | `8300` | Linux filesystem |
+| Home | Remaining space | `8300` | Linux filesystem |
 
+> **Tip:** Press `p` inside gdisk to print and verify your partition layout, then `w` to write changes.
 
-# Create New partition (home partition)
-1) gdisk -> press n for new partition again
-2) First sector:default
-3) Last sector: default (because we are filing out all of the available space)
-4) Hex code or GUID: 8300 (8300 is code for Linux filesystem)
+---
 
-# Check your partitions
- When in gdisk: press p (print your partitions)
- If you are satisfied -> press w (write)
+## Format Partitions
 
-# FORMAT PARTITIONS FOR THEIR FILESYSTEMS
+```bash
+# Root and Home partitions
+mkfs.ext4 /dev/sda3    # root
+mkfs.ext4 /dev/sda4    # home
 
-mkfs.ext4 /dev/sda3 (sda3 is root partition)
-mkfs.ext4 /dev/sda4 (sda4 is home partition)
-
-mkswap /dev/sda2 (sda2 is swap partition)
+# Swap partition
+mkswap /dev/sda2
 swapon /dev/sda2
+```
 
-# If you are on BIOS you are done at this point, if you are UEFI do this command
-mkfs.fat -F 32 /dev/sda1 (sda1 is boot partition)
+> **UEFI only:** also format the EFI/boot partition:
+> ```bash
+> mkfs.fat -F 32 /dev/sda1
+> ```
 
-# Check your work
+Verify your work:
+
+```bash
 fdisk -l
+```
 
-# MOUNTING THE FILESYSTEMS
+---
 
-mount /dev/sda3 /mnt (sda3 is our root partition)
+## Mount Filesystems
+
+```bash
+mount /dev/sda3 /mnt          # root partition
 mkdir /mnt/home
-mount /dev/sda4 /mnt/home (sda4 is our home partition)
+mount /dev/sda4 /mnt/home     # home partition
+```
 
-# For UEFI systems, mount the EFI system partition. For example:
-mount --mkdir /dev/sda1 /mnt/boot
+> **UEFI only:** mount the EFI system partition:
+> ```bash
+> mount --mkdir /dev/sda1 /mnt/boot
+> ```
 
+---
 
-# MIRRORS
+## Mirrors & Base Install
 
+```bash
+# Set up mirrors (adjust --country as needed)
 reflector --country HR --latest 5 --sort rate --save /etc/pacman.d/mirrorlist
+
+# Install base system
 pacstrap -K /mnt base linux linux-firmware base-devel vim networkmanager
+```
 
-# FSTAB
-# mount our mount points on boot
+---
 
+## fstab
+
+Generate the fstab file to auto-mount partitions on boot:
+
+```bash
 genfstab -U /mnt >> /mnt/etc/fstab
-cat /mnt/etc/fstab ->>>>> check your mount points (At this point if BIOS you would have 3 entries and if UEFI 4 partitions)
+cat /mnt/etc/fstab    # verify entries
+```
 
-# BOOT 
+> Expect 3 entries on BIOS systems and 4 on UEFI systems.
+
+---
+
+## Chroot & System Configuration
+
+```bash
 arch-chroot /mnt
+```
 
-# LOCALIZATION
-ln -sf /usr/share/zoneinfo/yourzone -> for example for US: ln -sf /usr/share/zoneinfo/US/Eastern /etc/localtime (use TAB for completion to help yourself)
+### Timezone
 
+```bash
+ln -sf /usr/share/zoneinfo/<Region>/<City> /etc/localtime
+# Example: ln -sf /usr/share/zoneinfo/US/Eastern /etc/localtime
 hwclock --systohc
+```
 
-vim /etc/locale.gen ->> uncomment your locale and save
-locale-gen (to generate locales)
-vim /etc/locale.conf -> add your LANG variable (ex. LANG=en_US.UTF8)
-cat /etc/locale.conf -> for double checking
+### Locale
 
-echo "$yourhostname" >> /etc/hostname
-cat /etc/hostname -> for double checking
+```bash
+vim /etc/locale.gen      # uncomment your locale (e.g. en_US.UTF-8 UTF-8)
+locale-gen
+vim /etc/locale.conf     # add: LANG=en_US.UTF-8
+cat /etc/locale.conf     # verify
+```
 
-# USERS
+### Hostname
 
-passwd (and set your root password)
-useradd -m -G wheel,users $user ($user = your preferred username)
-passwd $user (set password)
+```bash
+echo "yourhostname" >> /etc/hostname
+cat /etc/hostname         # verify
+```
 
-# NETWORK
+---
 
+## Users
+
+```bash
+passwd                              # set root password
+useradd -m -G wheel,users <user>    # create user and add to groups
+passwd <user>                       # set user password
+```
+
+---
+
+## Network
+
+```bash
 systemctl enable NetworkManager
+```
 
-# BOOTLOADER
+---
 
-pacman -S efibootmgr (for UEFI)
+## Bootloader
+
+```bash
 pacman -S grub man-db man-pages
-grub-install --target=i386-pc /dev/sda (For BIOS systems)
+
+# BIOS systems:
+grub-install --target=i386-pc /dev/sda
+
+# UEFI systems (also install efibootmgr first):
+pacman -S efibootmgr
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 
-# UNMOUNT
+# Generate GRUB config (both):
+grub-mkconfig -o /boot/grub/grub.cfg
+```
 
-umount -R /mnt 
+---
+
+## Unmount & Reboot
+
+```bash
+exit          # exit chroot
+umount -R /mnt
 reboot
+```
 
-# EXTRAS AFTER INSTALL AND REBOOT
+---
 
-# SUDO for non root users
+## Post-Install Extras
+
+### Sudo for Non-Root Users
+
+```bash
 pacman -S vi
-visudo (change your users permissions for sudo access)
+visudo        # uncomment the %wheel ALL=(ALL) ALL line
+```
 
-# Updates
-sudo pacman -Syu (S = sync, y= refresh db, u= packages that need to be updated do update)
-sudo pacman -Rns (Removes a package and removes unneeded dependencies)
-sudo pacman -Ss (search for packages)
+### Package Management
 
-# Install AUR repository (yay command)
+```bash
+sudo pacman -Syu             # sync and update all packages
+sudo pacman -Rns <package>   # remove package and unneeded dependencies
+sudo pacman -Ss <query>      # search for a package
+```
+
+### Install AUR Helper (yay)
+
+```bash
 sudo pacman -S git
 git clone https://aur.archlinux.org/yay.git
+cd yay
 makepkg -si
-rm-rf yay/
+cd .. && rm -rf yay/
+```
 
-# Check services
-sudo systemctl status/start/stop $servicename (ex. systemctl status NetworkManager)
+### Manage Services
 
+```bash
+sudo systemctl status <service>    # check service status
+sudo systemctl start <service>     # start a service
+sudo systemctl stop <service>      # stop a service
+# Example: sudo systemctl status NetworkManager
+```
 
+---
 
+> **Note:** Replace placeholder values like `<device>`, `<user>`, `<SSID>`, and `<Region>/<City>` with your actual system details.
