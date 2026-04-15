@@ -86,7 +86,7 @@ Inside `gdisk`, press `n` to create a new partition. Use the table below as a re
 
 | Partition | Size | Hex Code | Notes |
 |-----------|------|----------|-------|
-| Boot | ~512MB | `ef02` (BIOS) / `EF00` (UEFI) | Required for booting |
+| Boot | BIOS 2MB/ UEFI~1-2GB | `ef02` (BIOS) / `EF00` (UEFI) | Required for booting |
 | Swap | ~1.5× your RAM | `8200` | Linux swap |
 | Root | 20–50GB+ | `8300` | Linux filesystem |
 | Home | Remaining space | `8300` | Linux filesystem |
