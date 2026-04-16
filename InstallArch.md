@@ -272,6 +272,10 @@ sudo systemctl status <service>    # check service status
 sudo systemctl start <service>     # start a service
 sudo systemctl stop <service>      # stop a service
 # Example: sudo systemctl status NetworkManager
+
+Some useful packages for installation:
+sudo pacman -S libreoffice-fresh calibre vlc localsend doublecmd-qt6 qbittorrent thunderbird spotify bitwarden thunar thunar-archive-plugin thunar-volman gvfs gvfs-mtp gvfs-smb tumbler fastfetch kitty neovim kdeconnect timeshift
+yay -S sublime-text-4 obsidian brave-bin visual-studio-code-bin
 ```
 
 ---
