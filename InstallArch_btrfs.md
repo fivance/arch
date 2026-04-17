@@ -158,28 +158,31 @@ Mount each subvolume with recommended btrfs options:
 
 ```
 # Root subvolume
-mount -o subvol=@,compress=zstd,noatime /dev/sda3 /mnt
+mount -o subvol=@,noatime,ssd,compress=zstd,space_cache=v2,discard=async /dev/sda3 /mnt
 
 # Home subvolume
 mkdir -p /mnt/home
-mount -o subvol=@home,compress=zstd,noatime /dev/sda3 /mnt/home
+mount -o subvol=@home,noatime,ssd,compress=zstd,space_cache=v2,discard=async /dev/sda3 /mnt/home
 
 # /var/log
 mkdir -p /mnt/var/log
-mount -o subvol=@log,compress=zstd,noatime /dev/sda3 /mnt/var/log
+mount -o subvol=@log,noatime,ssd,compress=zstd,space_cache=v2,discard=async /dev/sda3 /mnt/var/log
 
 # /var/cache
 mkdir -p /mnt/var/cache
-mount -o subvol=@cache,compress=zstd,noatime /dev/sda3 /mnt/var/cache
+mount -o subvol=@cache,noatime,ssd,compress=zstd,space_cache=v2,discard=async /dev/sda3 /mnt/var/cache
 
 # Snapshots
 mkdir -p /mnt/.snapshots
-mount -o subvol=@snapshots,compress=zstd,noatime /dev/sda3 /mnt/.snapshots
+mount -o subvol=@snapshots,noatime,ssd,compress=zstd,space_cache=v2,discard=async /dev/sda3 /mnt/.snapshots
 ```
 
 > **Mount options explained:**
-> - `compress=zstd` — transparent compression, saves significant disk space
 > - `noatime` — don't update access times on reads, reduces write overhead
+> - `ssd` — enables SSD-specific optimisations in btrfs
+> - `compress=zstd` — transparent compression, saves significant disk space
+> - `space_cache=v2` — improved free space cache for better performance
+> - `discard=async` — async TRIM, keeps SSD performance healthy without blocking I/O
 
 > **UEFI only:** mount the EFI system partition:
 >
