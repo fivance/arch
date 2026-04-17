@@ -224,8 +224,8 @@ pacstrap -K /mnt \
   btrfs-progs grub-btrfs \
   openssh sudo git reflector \
   bluez bluez-utils \
-  pipewire pipewire-pulse pipewire-jack alsa-utils sof-firmware \
-  iptables-nft firewalld \
+  pipewire pipewire-pulse \
+  iptables-nft \
   acpid man-db man-pages
 ```
 
@@ -312,7 +312,6 @@ Enable all essential services before rebooting:
 systemctl enable NetworkManager
 systemctl enable bluetooth
 systemctl enable sshd
-systemctl enable firewalld
 systemctl enable fstrim.timer      # periodic SSD TRIM (weekly)
 systemctl enable reflector.timer   # auto-refresh mirrorlist
 systemctl enable acpid             # ACPI event handling (power button, lid, etc.)
