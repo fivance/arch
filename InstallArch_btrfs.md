@@ -18,7 +18,7 @@ Uses **btrfs** with subvolumes for snapshot support (Timeshift / snapper compati
 * [fstab](#fstab)
 * [Chroot & System Configuration](#chroot--system-configuration)
 * [Users](#users)
-* [Network](#network)
+* [Network & Services](#network--services)
 * [Bootloader](#bootloader)
 * [Unmount & Reboot](#unmount--reboot)
 * [Post-Install Extras](#post-install-extras)
@@ -28,6 +28,25 @@ Uses **btrfs** with subvolumes for snapshot support (Timeshift / snapper compati
 ## Prerequisites
 
 Burn an ISO image to a USB drive and boot from it to start the Arch install.
+
+### Keyboard Layout
+
+The default layout is US. To change it:
+
+```
+localectl list-keymaps        # list available keymaps
+loadkeys <your-keymap>        # e.g. loadkeys hr (Croatian)
+```
+
+### Optional: SSH Into the Live ISO
+
+If you prefer to install from another machine (e.g. to copy-paste commands):
+
+```
+passwd              # set a temporary root password for the ISO session
+systemctl start sshd
+ip addr show        # get the IP, then SSH in from another machine: ssh root@<ip>
+```
 
 ---
 
@@ -198,9 +217,26 @@ mount -o subvol=@snapshots,noatime,ssd,compress=zstd,space_cache=v2,discard=asyn
 # Set up mirrors (adjust --country as needed)
 reflector --country HR --latest 5 --sort rate --save /etc/pacman.d/mirrorlist
 
-# Install base system (btrfs-progs added for btrfs tools)
-pacstrap -K /mnt base linux linux-firmware base-devel vim networkmanager btrfs-progs
+# Install base system
+pacstrap -K /mnt \
+  base linux linux-firmware base-devel \
+  vim networkmanager network-manager-applet \
+  btrfs-progs grub-btrfs \
+  openssh sudo git reflector \
+  bluez bluez-utils \
+  pipewire pipewire-pulse pipewire-jack alsa-utils sof-firmware \
+  iptables-nft firewalld \
+  acpid man-db man-pages
 ```
+
+> **CPU microcode** — install the appropriate package for your CPU inside chroot (step below):
+>
+> ```
+> pacman -S intel-ucode   # Intel CPUs
+> pacman -S amd-ucode     # AMD CPUs
+> ```
+>
+> Then regenerate GRUB config after installing: `grub-mkconfig -o /boot/grub/grub.cfg`
 
 ---
 
@@ -241,6 +277,14 @@ vim /etc/locale.conf     # add: LANG=en_US.UTF-8
 cat /etc/locale.conf     # verify
 ```
 
+### Console Keymap (persistent)
+
+If you changed the keymap earlier in the live ISO, make it stick in the installed system:
+
+```
+echo "KEYMAP=<your-keymap>" >> /etc/vconsole.conf   # e.g. KEYMAP=hr
+```
+
 ### Hostname
 
 ```
@@ -262,8 +306,16 @@ passwd <user>                       # set user password
 
 ## Network
 
+Enable all essential services before rebooting:
+
 ```
 systemctl enable NetworkManager
+systemctl enable bluetooth
+systemctl enable sshd
+systemctl enable firewalld
+systemctl enable fstrim.timer      # periodic SSD TRIM (weekly)
+systemctl enable reflector.timer   # auto-refresh mirrorlist
+systemctl enable acpid             # ACPI event handling (power button, lid, etc.)
 ```
 
 ---
@@ -334,14 +386,54 @@ sudo systemctl stop <service>      # stop a service
 
 ### Set Up Snapshots with Timeshift
 
-Timeshift works great with the `@` / `@home` subvolume layout used in this guide:
+Timeshift works great with the `@` / `@home` subvolume layout used in this guide. `timeshift-autosnap` automatically takes a snapshot before every pacman upgrade, and `grub-btrfs` adds snapshots to the GRUB boot menu so you can boot into one if something breaks.
 
 ```
-sudo pacman -S timeshift
+yay -S timeshift timeshift-autosnap
 ```
 
-Launch Timeshift, select **btrfs** as the snapshot type, and it will auto-detect your `@` subvolume.
-Schedule automatic snapshots (e.g. daily) so you can roll back after bad updates.
+Launch Timeshift, select **btrfs** as the snapshot type, and it will auto-detect your `@` subvolume. Schedule automatic snapshots (e.g. daily) for ongoing protection.
+
+To make GRUB pick up snapshots automatically, patch the `grub-btrfsd` service to watch for new snapshots at runtime:
+
+```
+sudo systemctl edit --full grub-btrfsd
+```
+
+Replace the `ExecStart` line with:
+
+```
+ExecStart=/usr/bin/grub-btrfsd --syslog -t
+```
+
+Then rebuild the GRUB config:
+
+```
+sudo grub-mkconfig -o /boot/grub/grub.cfg
+sudo systemctl enable --now grub-btrfsd
+```
+
+### zram (Compressed Swap in RAM)
+
+A lightweight alternative to a swap partition. zram compresses data in RAM instead of writing to disk — it only activates when RAM is nearly full, and is much faster than disk swap.
+
+```
+sudo pacman -S zram-generator
+```
+
+Create `/etc/systemd/zram-generator.conf`:
+
+```
+[zram0]
+zram-size = ram / 2
+compression-algorithm = zstd
+swap-priority = 100
+fs-type = swap
+```
+
+Reboot or run `systemctl daemon-reload && systemctl start systemd-zram-setup@zram0` to activate.
+
+> **Note:** If you added a swap partition during partitioning, you can keep both — zram will be preferred due to the higher `swap-priority`.
 
 ### Useful Packages
 
